@@ -1,13 +1,16 @@
 {
   "expo": {
-    "name": "read-pdf",
+    "name": "Read Fatura",
     "slug": "read-pdf",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "CFBundleAllowMixedLocalizations": true
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +25,23 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-localization"
+      [
+        "expo-localization",
+        {
+          "supportedLocales": {
+            "ios": ["tr", "en", "es", "pt", "fr", "de", "ar", "ru", "hi", "id", "zh-CN"],
+            "android": ["tr", "en", "es", "pt", "fr", "de", "ar", "ru", "hi", "id", "zh-CN"]
+          }
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan invoices and receipts.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
+        }
+      ]
     ]
   }
 }
