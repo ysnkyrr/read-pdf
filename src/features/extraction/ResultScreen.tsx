@@ -114,6 +114,14 @@ export function ResultScreen({ navigation, route }: Props) {
             <MoonText style={styles.summaryLabel}>{t('result.tax')}</MoonText>
             <MoonText style={styles.summaryValue}>{money.format(document.taxTotal)}</MoonText>
           </View>
+
+          {document.taxBreakdown?.map((row) => (
+            <View key={row.rate} style={styles.taxBreakdownRow}>
+              <MoonText style={styles.taxBreakdownLabel}>{t('result.tax')} %{row.rate}</MoonText>
+              <MoonText style={styles.taxBreakdownValue}>{money.format(row.tax)}</MoonText>
+            </View>
+          ))}
+
           <View style={[styles.summaryRow, styles.summaryTotalRow]}>
             <MoonText style={styles.totalLabel}>{t('result.total')}</MoonText>
             <MoonText style={styles.totalValue}>{money.format(document.total)}</MoonText>
@@ -166,6 +174,9 @@ const styles = StyleSheet.create({
   input: { minHeight: 48, borderRadius: moonRadius.medium, backgroundColor: moonColors.surfaceMuted, borderWidth: 1, borderColor: moonColors.border, paddingHorizontal: moonSpacing[4], color: moonColors.textPrimary, fontSize: 15, fontWeight: '600' },
   summaryCard: { marginBottom: moonSpacing[6] },
   summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: moonSpacing[2] },
+  taxBreakdownRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: moonSpacing[1], paddingLeft: moonSpacing[3] },
+  taxBreakdownLabel: { color: moonColors.textSecondary, fontSize: 12 },
+  taxBreakdownValue: { color: moonColors.textSecondary, fontSize: 12, fontWeight: '700' },
   summaryTotalRow: { borderTopWidth: 1, borderTopColor: moonColors.border, marginTop: moonSpacing[2], paddingTop: moonSpacing[4] },
   summaryLabel: { color: moonColors.textSecondary, fontSize: 14 },
   summaryValue: { color: moonColors.textPrimary, fontSize: 14, fontWeight: '700' },
