@@ -12,6 +12,7 @@
     "expo-haptics": "~57.0.2",
     "expo-image-picker": "~57.0.16",
     "expo-localization": "~57.0.1",
+    "expo-ocr-kit": "^0.1.4",
     "expo-status-bar": "~57.0.1",
     "i18next": "^26.4.2",
     "pdfjs-dist": "^6.3.289",
