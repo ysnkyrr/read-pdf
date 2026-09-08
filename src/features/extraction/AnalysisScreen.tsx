@@ -1,50 +1,63 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
+import { MoonButton } from '../../moonlinea/components/MoonButton';
 import { MoonJourney } from '../../moonlinea/components/MoonJourney';
 import { MoonText } from '../../moonlinea/components/MoonText';
 import { moonColors, moonRadius, moonSpacing } from '../../moonlinea/theme/tokens';
 import { analyzeDocument } from '../../services/extractionService';
+import { OcrError, OcrProgress } from '../../services/ocr';
 import { RootStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Analysis'>;
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+function stageIndex(progress: OcrProgress | null) {
+  if (!progress || progress.stage === 'loading') return 0;
+  if (progress.stage === 'reading') return 1;
+  return 2;
+}
 
 export function AnalysisScreen({ navigation, route }: Props) {
   const { t } = useTranslation();
-  const [stage, setStage] = useState(0);
+  const [progress, setProgress] = useState<OcrProgress | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  const retry = useCallback(() => {
+    setError(null);
+    setProgress(null);
+    setAttempt((value) => value + 1);
+  }, []);
 
   useEffect(() => {
     let active = true;
 
     const run = async () => {
-      setStage(0);
-      await wait(450);
-      if (!active) return;
-      setStage(1);
-
-      await wait(520);
-      if (!active) return;
-      setStage(2);
-
-      const document = await analyzeDocument(route.params);
-      if (!active) return;
-
-      await wait(350);
-      if (active) navigation.replace('Result', { document });
+      try {
+        const document = await analyzeDocument(route.params, {
+          onProgress: (nextProgress) => {
+            if (active) setProgress(nextProgress);
+          },
+        });
+        if (active) navigation.replace('Result', { document });
+      } catch (nextError) {
+        if (!active) return;
+        setError(nextError instanceof Error ? nextError : new Error('OCR failed'));
+      }
     };
 
     void run();
     return () => {
       active = false;
     };
-  }, [navigation, route.params]);
+  }, [attempt, navigation, route.params]);
 
+  const isNativeUnavailable = error instanceof OcrError && error.code === 'unsupported-native';
   const steps = [t('analysis.step1'), t('analysis.step2'), t('analysis.step3')];
+  const currentStage = stageIndex(progress);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
@@ -61,28 +74,39 @@ export function AnalysisScreen({ navigation, route }: Props) {
             <View style={styles.scanBar} />
           </View>
 
-          <MoonText style={styles.title}>{t('analysis.title')}</MoonText>
-          <MoonText style={styles.subtitle}>{t('analysis.subtitle')}</MoonText>
+          <MoonText style={styles.title}>
+            {error ? (isNativeUnavailable ? t('ocr.nativeTitle') : t('ocr.errorTitle')) : t('analysis.title')}
+          </MoonText>
+          <MoonText style={styles.subtitle}>
+            {error ? (isNativeUnavailable ? t('ocr.nativeBody') : t('ocr.errorBody')) : t('analysis.subtitle')}
+          </MoonText>
 
-          <View style={styles.progressCard}>
-            {steps.map((label, index) => {
-              const complete = index < stage;
-              const current = index === stage;
-              return (
-                <View key={label} style={styles.progressRow}>
-                  <View style={[styles.statusDot, complete && styles.statusComplete, current && styles.statusCurrent]}>
-                    {complete ? <MoonText style={styles.check}>✓</MoonText> : null}
+          {error ? (
+            <View style={styles.errorActions}>
+              {!isNativeUnavailable ? <MoonButton label={t('ocr.retry')} onPress={retry} /> : null}
+              <MoonButton label={t('common.back')} variant="secondary" onPress={() => navigation.goBack()} />
+            </View>
+          ) : (
+            <View style={styles.progressCard}>
+              {steps.map((label, index) => {
+                const complete = index < currentStage;
+                const current = index === currentStage;
+                return (
+                  <View key={label} style={styles.progressRow}>
+                    <View style={[styles.statusDot, complete && styles.statusComplete, current && styles.statusCurrent]}>
+                      {complete ? <MoonText style={styles.check}>✓</MoonText> : null}
+                    </View>
+                    <MoonText style={[styles.progressLabel, (complete || current) && styles.progressLabelActive]}>
+                      {label}
+                    </MoonText>
                   </View>
-                  <MoonText style={[styles.progressLabel, (complete || current) && styles.progressLabelActive]}>
-                    {label}
-                  </MoonText>
-                </View>
-              );
-            })}
-          </View>
+                );
+              })}
+            </View>
+          )}
         </View>
 
-        <MoonText style={styles.demoNote}>{t('analysis.demo')}</MoonText>
+        {!error ? <MoonText style={styles.localNote}>{t('ocr.localNote')}</MoonText> : null}
       </View>
     </SafeAreaView>
   );
@@ -121,7 +145,7 @@ const styles = StyleSheet.create({
     backgroundColor: moonColors.accent,
   },
   title: { color: moonColors.textPrimary, fontSize: 30, lineHeight: 36, fontWeight: '800', textAlign: 'center', marginBottom: moonSpacing[3] },
-  subtitle: { color: moonColors.textSecondary, fontSize: 16, lineHeight: 24, textAlign: 'center', marginBottom: moonSpacing[6] },
+  subtitle: { color: moonColors.textSecondary, fontSize: 16, lineHeight: 24, textAlign: 'center', marginBottom: moonSpacing[6], maxWidth: 520 },
   progressCard: {
     width: '100%',
     maxWidth: 460,
@@ -148,5 +172,6 @@ const styles = StyleSheet.create({
   check: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   progressLabel: { color: moonColors.textSecondary, fontSize: 15, fontWeight: '600' },
   progressLabelActive: { color: moonColors.textPrimary, fontWeight: '800' },
-  demoNote: { color: moonColors.textSecondary, fontSize: 11, lineHeight: 17, textAlign: 'center', marginBottom: moonSpacing[3] },
+  errorActions: { width: '100%', maxWidth: 420, gap: moonSpacing[3] },
+  localNote: { color: moonColors.textSecondary, fontSize: 11, lineHeight: 17, textAlign: 'center', marginBottom: moonSpacing[3] },
 });
