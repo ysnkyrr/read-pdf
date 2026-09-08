@@ -1,3 +1,4 @@
+import { applyCorrectionMemory } from './correctionMemory';
 import { parseInvoiceText } from './invoiceParser';
 import { OcrProgress, recognizeDocument } from './ocr';
 import { refineReceiptExtraction } from './receiptRefiner';
@@ -28,5 +29,6 @@ export async function analyzeDocument(
   );
 
   options.onProgress?.({ stage: 'finalizing', progress: 0.98 });
-  return refineReceiptExtraction(parseInvoiceText(input, ocr));
+  const parsed = refineReceiptExtraction(parseInvoiceText(input, ocr));
+  return applyCorrectionMemory(parsed);
 }
