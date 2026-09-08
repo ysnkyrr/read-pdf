@@ -1,32 +1,31 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getLocales } from 'expo-localization';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
 import { resources, SupportedLanguage, supportedLanguages } from './resources';
 
 const LANGUAGE_STORAGE_KEY = 'read-fatura.language';
+const DEFAULT_LANGUAGE: SupportedLanguage = 'tr';
 
 function normalizeLanguage(language?: string | null): SupportedLanguage {
-  if (!language) return 'en';
+  if (!language) return DEFAULT_LANGUAGE;
 
   const lower = language.toLowerCase();
   if (lower.startsWith('zh')) return 'zh-CN';
 
   const base = lower.split('-')[0] as SupportedLanguage;
-  return supportedLanguages.includes(base) ? base : 'en';
+  return supportedLanguages.includes(base) ? base : DEFAULT_LANGUAGE;
 }
 
 export async function initializeI18n() {
   const saved = await AsyncStorage.getItem(LANGUAGE_STORAGE_KEY);
-  const deviceLanguage = getLocales()[0]?.languageTag;
-  const language = normalizeLanguage(saved ?? deviceLanguage);
+  const language = normalizeLanguage(saved ?? DEFAULT_LANGUAGE);
 
   if (!i18n.isInitialized) {
     await i18n.use(initReactI18next).init({
       resources,
       lng: language,
-      fallbackLng: 'en',
+      fallbackLng: DEFAULT_LANGUAGE,
       supportedLngs: supportedLanguages,
       interpolation: { escapeValue: false },
       returnNull: false,
@@ -47,6 +46,7 @@ export function getCurrentLanguage(): SupportedLanguage {
   return normalizeLanguage(i18n.language);
 }
 
+export { DEFAULT_LANGUAGE };
 export { supportedLanguages } from './resources';
 export type { SupportedLanguage } from './resources';
 export default i18n;
