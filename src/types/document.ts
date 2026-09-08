@@ -10,6 +10,12 @@ export type ExtractedLineItem = {
   total: number;
 };
 
+export type ExtractedTaxBreakdown = {
+  rate: number;
+  base: number;
+  tax: number;
+};
+
 export type ExtractedDocument = {
   id: string;
   createdAt: string;
@@ -22,9 +28,11 @@ export type ExtractedDocument = {
   supplierTaxNumber: string;
   invoiceNumber: string;
   invoiceDate: string;
+  ettn?: string;
   currency: string;
   subtotal: number;
   taxTotal: number;
+  taxBreakdown?: ExtractedTaxBreakdown[];
   total: number;
   paymentMethod: string;
   items: ExtractedLineItem[];
