@@ -4,6 +4,7 @@ import { initReactI18next } from 'react-i18next';
 
 import { resources, SupportedLanguage, supportedLanguages } from './resources';
 import { workflowResources } from './workflowResources';
+import { ocrResources } from './ocrResources';
 
 const LANGUAGE_STORAGE_KEY = 'read-fatura.language';
 const DEFAULT_LANGUAGE: SupportedLanguage = 'tr';
@@ -13,6 +14,7 @@ const mergedResources = supportedLanguages.reduce((acc, language) => {
     translation: {
       ...resources[language].translation,
       ...workflowResources[language].translation,
+      ...ocrResources[language].translation,
     },
   };
   return acc;
