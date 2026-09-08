@@ -27,6 +27,7 @@ type FieldProps = {
   value: string;
   onChangeText: (value: string) => void;
   wide?: boolean;
+  standalone?: boolean;
 };
 
 type NumericFieldProps = {
@@ -36,9 +37,9 @@ type NumericFieldProps = {
   compact?: boolean;
 };
 
-function EditableField({ label, value, onChangeText, wide }: FieldProps) {
+function EditableField({ label, value, onChangeText, wide, standalone }: FieldProps) {
   return (
-    <View style={[styles.field, wide && styles.fieldWide]}>
+    <View style={[styles.field, wide && styles.fieldWide, standalone && styles.fieldStandalone]}>
       <MoonText style={styles.fieldLabel}>{label}</MoonText>
       <TextInput
         value={value}
@@ -293,6 +294,7 @@ export function ResultScreen({ navigation, route }: Props) {
                 value={item.description}
                 onChangeText={(value) => updateItemText(index, value)}
                 wide
+                standalone
               />
               <View style={styles.itemEditGrid}>
                 <NumericField label={t('result.quantity')} value={item.quantity} onCommit={(value) => updateItemNumber(index, 'quantity', value)} compact />
@@ -359,6 +361,7 @@ const styles = StyleSheet.create({
   fieldsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: moonSpacing[3] },
   field: { flexGrow: 1, flexBasis: 220, minWidth: 0 },
   fieldWide: { flexBasis: '100%' },
+  fieldStandalone: { flexGrow: 0, flexBasis: 'auto', width: '100%' },
   numericField: { flexGrow: 1, flexBasis: 200, minWidth: 0 },
   numericFieldCompact: { flexBasis: 140 },
   fieldLabel: { color: moonColors.textSecondary, fontSize: 11, fontWeight: '800', letterSpacing: 0.5, marginBottom: moonSpacing[2] },
