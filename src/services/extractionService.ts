@@ -1,5 +1,6 @@
 import { parseInvoiceText } from './invoiceParser';
 import { OcrProgress, recognizeDocument } from './ocr';
+import { refineReceiptExtraction } from './receiptRefiner';
 import { ExtractedDocument } from '../types/document';
 
 type AnalyzeInput = {
@@ -27,5 +28,5 @@ export async function analyzeDocument(
   );
 
   options.onProgress?.({ stage: 'finalizing', progress: 0.98 });
-  return parseInvoiceText(input, ocr);
+  return refineReceiptExtraction(parseInvoiceText(input, ocr));
 }
