@@ -1,5 +1,7 @@
 export type DocumentSource = 'camera' | 'file';
 
+export type ExtractionEngine = 'tesseract-web' | 'pdf-text' | 'mixed-web' | 'native-ocr';
+
 export type ExtractedLineItem = {
   description: string;
   quantity: number;
@@ -27,5 +29,6 @@ export type ExtractedDocument = {
   paymentMethod: string;
   items: ExtractedLineItem[];
   confidence: number;
-  engine: 'demo';
+  engine: ExtractionEngine;
+  rawText?: string;
 };
