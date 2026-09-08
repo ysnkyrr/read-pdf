@@ -3,9 +3,20 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
 import { resources, SupportedLanguage, supportedLanguages } from './resources';
+import { workflowResources } from './workflowResources';
 
 const LANGUAGE_STORAGE_KEY = 'read-fatura.language';
 const DEFAULT_LANGUAGE: SupportedLanguage = 'tr';
+
+const mergedResources = supportedLanguages.reduce((acc, language) => {
+  acc[language] = {
+    translation: {
+      ...resources[language].translation,
+      ...workflowResources[language].translation,
+    },
+  };
+  return acc;
+}, {} as Record<SupportedLanguage, { translation: Record<string, unknown> }>);
 
 function normalizeLanguage(language?: string | null): SupportedLanguage {
   if (!language) return DEFAULT_LANGUAGE;
@@ -23,7 +34,7 @@ export async function initializeI18n() {
 
   if (!i18n.isInitialized) {
     await i18n.use(initReactI18next).init({
-      resources,
+      resources: mergedResources,
       lng: language,
       fallbackLng: DEFAULT_LANGUAGE,
       supportedLngs: supportedLanguages,
