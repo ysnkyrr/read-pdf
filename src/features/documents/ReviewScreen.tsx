@@ -61,8 +61,7 @@ export function ReviewScreen({ navigation, route }: Props) {
           </View>
         </MoonCard>
 
-        <MoonButton label={t('review.start')} disabled />
-        <MoonText style={styles.pending}>{t('review.notConnected')}</MoonText>
+        <MoonButton label={t('review.start')} onPress={() => navigation.navigate('Analysis', route.params)} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -85,5 +84,4 @@ const styles = StyleSheet.create({
   fileName: { color: moonColors.textPrimary, fontSize: 18, lineHeight: 25, fontWeight: '800', marginBottom: moonSpacing[4] },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: moonSpacing[2] },
   metaValue: { color: moonColors.textSecondary, fontSize: 12, backgroundColor: moonColors.surfaceMuted, paddingHorizontal: moonSpacing[3], paddingVertical: moonSpacing[2], borderRadius: moonRadius.pill },
-  pending: { color: moonColors.textSecondary, fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: moonSpacing[3] },
 });
