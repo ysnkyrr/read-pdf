@@ -9,11 +9,20 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 
 export default function App() {
   const [ready, setReady] = useState(false);
+  const [direction, setDirection] = useState<'ltr' | 'rtl'>('ltr');
 
   useEffect(() => {
     initializeI18n()
+      .then(() => setDirection(i18n.dir()))
       .catch(() => undefined)
       .finally(() => setReady(true));
+
+    const handleLanguageChanged = () => setDirection(i18n.dir());
+    i18n.on('languageChanged', handleLanguageChanged);
+
+    return () => {
+      i18n.off('languageChanged', handleLanguageChanged);
+    };
   }, []);
 
   if (!ready) {
@@ -27,7 +36,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <View style={[styles.root, { direction: i18n.dir() }]}>
+      <View style={[styles.root, { direction }]}>
         <StatusBar style="dark" />
         <AppNavigator />
       </View>
