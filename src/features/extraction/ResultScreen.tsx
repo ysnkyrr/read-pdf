@@ -287,7 +287,7 @@ export function ResultScreen({ navigation, route }: Props) {
 
         <View style={styles.itemsList}>
           {document.items.map((item, index) => (
-            <MoonCard key={`${index}-${item.description}`} style={styles.itemCard}>
+            <MoonCard key={`item-${index}`} style={styles.itemCard}>
               <EditableField
                 label={t('management.itemDescription')}
                 value={item.description}
