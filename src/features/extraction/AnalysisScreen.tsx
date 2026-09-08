@@ -42,7 +42,7 @@ export function AnalysisScreen({ navigation, route }: Props) {
             if (active) setProgress(nextProgress);
           },
         });
-        if (active) navigation.replace('Result', { document });
+        if (active) navigation.replace('Result', { document, origin: 'analysis' });
       } catch (nextError) {
         if (!active) return;
         setError(nextError instanceof Error ? nextError : new Error('OCR failed'));
