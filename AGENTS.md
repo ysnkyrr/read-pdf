@@ -42,3 +42,10 @@ Keep layouts RTL-safe for Arabic and use locale-aware formatting for dates, numb
 
 ## Product architecture
 Keep reusable experience code under `src/moonlinea/` and product features under `src/features/`. Do not duplicate MoonPress, haptic, motion, decision, or progress behavior inside individual screens.
+
+## OCR and extraction
+- Free-first is the default product path. Do not make a paid OCR/AI API mandatory for standard document reading.
+- Web OCR uses browser-side Tesseract.js. Text-native PDFs should bypass OCR with PDF.js text extraction; image PDFs may be rendered and OCR'd locally.
+- iOS/Android OCR should run on-device through a native adapter and must stay behind `src/services/ocr/` so the provider can be replaced later.
+- Keep OCR and invoice parsing separate. OCR returns text; domain parsers turn text into structured invoice/receipt data.
+- Never put paid-provider API keys in the client application.
