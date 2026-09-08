@@ -84,8 +84,8 @@ export function ResultScreen({ navigation, route }: Props) {
             <MoonText style={styles.title}>{t('result.title')}</MoonText>
             <MoonText style={styles.subtitle}>{t('result.subtitle')}</MoonText>
           </View>
-          <View style={styles.demoBadge}>
-            <MoonText style={styles.demoBadgeText}>{t('result.demoBadge')}</MoonText>
+          <View style={styles.ocrBadge}>
+            <MoonText style={styles.ocrBadgeText}>{t('ocr.badge')}</MoonText>
           </View>
         </View>
 
@@ -152,8 +152,8 @@ const styles = StyleSheet.create({
   headingCopy: { flex: 1 },
   title: { color: moonColors.textPrimary, fontSize: 32, lineHeight: 38, fontWeight: '800', letterSpacing: -0.8, marginBottom: moonSpacing[3] },
   subtitle: { color: moonColors.textSecondary, fontSize: 16, lineHeight: 24 },
-  demoBadge: { backgroundColor: '#FFF2D6', borderRadius: moonRadius.pill, paddingHorizontal: moonSpacing[3], paddingVertical: moonSpacing[2] },
-  demoBadgeText: { color: moonColors.warning, fontSize: 10, fontWeight: '900', letterSpacing: 0.7 },
+  ocrBadge: { backgroundColor: '#E7F7EF', borderRadius: moonRadius.pill, paddingHorizontal: moonSpacing[3], paddingVertical: moonSpacing[2] },
+  ocrBadgeText: { color: moonColors.success, fontSize: 10, fontWeight: '900', letterSpacing: 0.7 },
   confidenceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: moonSpacing[2] },
   confidenceLabel: { color: moonColors.textSecondary, fontSize: 13, fontWeight: '700' },
   confidenceValue: { color: moonColors.success, fontSize: 13, fontWeight: '900' },
