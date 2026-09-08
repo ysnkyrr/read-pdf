@@ -3,9 +3,11 @@ import { OcrError, OcrInput, OcrProgressCallback, OcrResult } from './types';
 const PDF_WORKER_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/legacy/build/pdf.worker.min.mjs';
 const MAX_PDF_PAGES = 6;
 const MIN_NATIVE_TEXT_CHARS = 40;
+const MAX_ENHANCED_WIDTH = 2400;
 
 type WorkerLike = {
   recognize: (image: unknown) => Promise<{ data: { text?: string; confidence?: number } }>;
+  setParameters?: (params: Record<string, string>) => Promise<unknown>;
   terminate: () => Promise<unknown>;
 };
 
@@ -21,6 +23,46 @@ function cleanText(text: string) {
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+async function enhanceImage(blob: Blob) {
+  if (typeof createImageBitmap !== 'function') return blob;
+
+  const bitmap = await createImageBitmap(blob);
+  try {
+    const scale = Math.max(1, Math.min(1.55, MAX_ENHANCED_WIDTH / Math.max(1, bitmap.width)));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+
+    const context = canvas.getContext('2d', { alpha: false, willReadFrequently: true });
+    if (!context) return blob;
+
+    context.fillStyle = '#FFFFFF';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    const pixels = imageData.data;
+
+    for (let index = 0; index < pixels.length; index += 4) {
+      const red = pixels[index];
+      const green = pixels[index + 1];
+      const blue = pixels[index + 2];
+      const gray = red * 0.299 + green * 0.587 + blue * 0.114;
+      const contrasted = Math.max(0, Math.min(255, (gray - 128) * 1.32 + 138));
+      pixels[index] = contrasted;
+      pixels[index + 1] = contrasted;
+      pixels[index + 2] = contrasted;
+    }
+
+    context.putImageData(imageData, 0, 0);
+    return canvas;
+  } finally {
+    bitmap.close();
+  }
 }
 
 export async function recognizeDocument(
@@ -43,13 +85,21 @@ export async function recognizeDocument(
         }
       },
     })) as unknown as WorkerLike;
+
+    await worker.setParameters?.({
+      preserve_interword_spaces: '1',
+      tessedit_pageseg_mode: '6',
+      user_defined_dpi: '300',
+    });
+
     return worker;
   };
 
   try {
     if (!isPdf) {
       const ocrWorker = await ensureWorker();
-      const result = await ocrWorker.recognize(blob);
+      const enhancedImage = await enhanceImage(blob).catch(() => blob);
+      const result = await ocrWorker.recognize(enhancedImage);
       const text = cleanText(result.data.text ?? '');
       if (!text) throw new OcrError('empty-text', 'No readable text was found in the image.');
 
@@ -90,13 +140,15 @@ export async function recognizeDocument(
         continue;
       }
 
-      const viewport = page.getViewport({ scale: 2.15 });
+      const viewport = page.getViewport({ scale: 2.35 });
       const canvas = document.createElement('canvas');
       canvas.width = Math.ceil(viewport.width);
       canvas.height = Math.ceil(viewport.height);
       const context = canvas.getContext('2d', { alpha: false });
       if (!context) throw new OcrError('read-failed', 'The PDF page could not be rendered.');
 
+      context.fillStyle = '#FFFFFF';
+      context.fillRect(0, 0, canvas.width, canvas.height);
       await page.render({ canvasContext: context, viewport, canvas }).promise;
       const ocrWorker = await ensureWorker();
       const result = await ocrWorker.recognize(canvas);
