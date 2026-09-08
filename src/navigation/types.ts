@@ -15,5 +15,6 @@ export type RootStackParamList = {
   Analysis: DocumentInputParams;
   Result: {
     document: ExtractedDocument;
+    origin?: 'analysis' | 'archive';
   };
 };
