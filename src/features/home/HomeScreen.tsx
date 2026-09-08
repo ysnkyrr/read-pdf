@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
+import { LanguagePicker } from '../../i18n/LanguagePicker';
 import { MoonButton } from '../../moonlinea/components/MoonButton';
 import { MoonCard } from '../../moonlinea/components/MoonCard';
 import { MoonText } from '../../moonlinea/components/MoonText';
@@ -38,10 +39,13 @@ export function HomeScreen({ navigation }: Props) {
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.brandRow}>
-          <View style={styles.mark} accessibilityElementsHidden>
-            <View style={styles.markInner} />
+          <View style={styles.brandIdentity}>
+            <View style={styles.mark} accessibilityElementsHidden>
+              <View style={styles.markInner} />
+            </View>
+            <MoonText style={styles.brand}>READ FATURA</MoonText>
           </View>
-          <MoonText style={styles.brand}>READ FATURA</MoonText>
+          <LanguagePicker />
         </View>
 
         <View style={styles.hero}>
@@ -103,7 +107,14 @@ const styles = StyleSheet.create({
     paddingTop: moonSpacing[4],
     paddingBottom: moonSpacing[12],
   },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: moonSpacing[3], marginBottom: moonSpacing[10] },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: moonSpacing[3],
+    marginBottom: moonSpacing[10],
+  },
+  brandIdentity: { flexDirection: 'row', alignItems: 'center', gap: moonSpacing[3], flexShrink: 1 },
   mark: { width: 30, height: 30, borderRadius: 10, backgroundColor: moonColors.textPrimary, alignItems: 'center', justifyContent: 'center' },
   markInner: { width: 10, height: 14, borderWidth: 2, borderColor: moonColors.primaryText, borderRadius: 2 },
   brand: { color: moonColors.textPrimary, fontSize: 13, fontWeight: '800', letterSpacing: 1.5 },
