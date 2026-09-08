@@ -11,6 +11,8 @@ type WorkerLike = {
   terminate: () => Promise<unknown>;
 };
 
+type EnhancementMode = 'contrast' | 'binary';
+
 async function getBlob(uri: string) {
   const response = await fetch(uri);
   if (!response.ok) throw new OcrError('read-failed', 'The selected document could not be opened.');
@@ -25,12 +27,33 @@ function cleanText(text: string) {
     .trim();
 }
 
-async function enhanceImage(blob: Blob) {
+function documentSignalScore(text: string, confidence: number) {
+  const normalized = text.toLocaleUpperCase('tr-TR');
+  const signals = [
+    'FATURA',
+    'VKN',
+    'VN:',
+    'KDV',
+    'TOPLAM',
+    'TUTAR',
+    'TARİH',
+    'TARIH',
+    'BARKOD',
+    'KREDİ',
+    'KREDI',
+  ].filter((signal) => normalized.includes(signal)).length;
+  const decimalAmounts = text.match(/\d+[.,]\d{2}/g)?.length ?? 0;
+  const usefulLines = text.split('\n').filter((line) => line.trim().length >= 4).length;
+
+  return confidence * 20 + signals * 3 + Math.min(7, decimalAmounts * 0.35) + Math.min(5, usefulLines / 14);
+}
+
+async function enhanceImage(blob: Blob, mode: EnhancementMode) {
   if (typeof createImageBitmap !== 'function') return blob;
 
   const bitmap = await createImageBitmap(blob);
   try {
-    const scale = Math.max(1, Math.min(1.55, MAX_ENHANCED_WIDTH / Math.max(1, bitmap.width)));
+    const scale = Math.max(1, Math.min(1.65, MAX_ENHANCED_WIDTH / Math.max(1, bitmap.width)));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
@@ -46,16 +69,29 @@ async function enhanceImage(blob: Blob) {
 
     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
     const pixels = imageData.data;
+    let grayTotal = 0;
+    const pixelCount = Math.max(1, pixels.length / 4);
+
+    for (let index = 0; index < pixels.length; index += 4) {
+      const gray = pixels[index] * 0.299 + pixels[index + 1] * 0.587 + pixels[index + 2] * 0.114;
+      grayTotal += gray;
+    }
+
+    const meanGray = grayTotal / pixelCount;
+    const binaryThreshold = Math.max(150, Math.min(205, meanGray * 0.9));
 
     for (let index = 0; index < pixels.length; index += 4) {
       const red = pixels[index];
       const green = pixels[index + 1];
       const blue = pixels[index + 2];
       const gray = red * 0.299 + green * 0.587 + blue * 0.114;
-      const contrasted = Math.max(0, Math.min(255, (gray - 128) * 1.32 + 138));
-      pixels[index] = contrasted;
-      pixels[index + 1] = contrasted;
-      pixels[index + 2] = contrasted;
+      const value = mode === 'binary'
+        ? gray < binaryThreshold ? 0 : 255
+        : Math.max(0, Math.min(255, (gray - 128) * 1.4 + 140));
+
+      pixels[index] = value;
+      pixels[index + 1] = value;
+      pixels[index + 2] = value;
     }
 
     context.putImageData(imageData, 0, 0);
@@ -74,6 +110,8 @@ export async function recognizeDocument(
   const blob = await getBlob(input.uri);
   const isPdf = input.mimeType === 'application/pdf' || input.name.toLowerCase().endsWith('.pdf');
   let worker: WorkerLike | null = null;
+  let progressStart = 0.15;
+  let progressSpan = 0.68;
 
   const ensureWorker = async () => {
     if (worker) return worker;
@@ -81,7 +119,10 @@ export async function recognizeDocument(
     worker = (await createWorker(['tur', 'eng'], 1, {
       logger: (message: { status?: string; progress?: number }) => {
         if (message.status === 'recognizing text') {
-          onProgress?.({ stage: 'reading', progress: 0.15 + (message.progress ?? 0) * 0.68 });
+          onProgress?.({
+            stage: 'reading',
+            progress: progressStart + (message.progress ?? 0) * progressSpan,
+          });
         }
       },
     })) as unknown as WorkerLike;
@@ -98,15 +139,46 @@ export async function recognizeDocument(
   try {
     if (!isPdf) {
       const ocrWorker = await ensureWorker();
-      const enhancedImage = await enhanceImage(blob).catch(() => blob);
-      const result = await ocrWorker.recognize(enhancedImage);
-      const text = cleanText(result.data.text ?? '');
-      if (!text) throw new OcrError('empty-text', 'No readable text was found in the image.');
+      progressStart = 0.15;
+      progressSpan = 0.43;
+
+      const contrastImage = await enhanceImage(blob, 'contrast').catch(() => blob);
+      const firstResult = await ocrWorker.recognize(contrastImage);
+      const firstText = cleanText(firstResult.data.text ?? '');
+      const firstConfidence = Math.max(0, Math.min(1, (firstResult.data.confidence ?? 70) / 100));
+      let bestText = firstText;
+      let bestConfidence = firstConfidence;
+      let bestScore = documentSignalScore(firstText, firstConfidence);
+
+      const shouldRunSecondPass = firstConfidence < 0.84 || bestScore < 37;
+      if (shouldRunSecondPass) {
+        progressStart = 0.58;
+        progressSpan = 0.28;
+        await ocrWorker.setParameters?.({
+          preserve_interword_spaces: '1',
+          tessedit_pageseg_mode: '4',
+          user_defined_dpi: '300',
+        });
+
+        const binaryImage = await enhanceImage(blob, 'binary').catch(() => blob);
+        const secondResult = await ocrWorker.recognize(binaryImage);
+        const secondText = cleanText(secondResult.data.text ?? '');
+        const secondConfidence = Math.max(0, Math.min(1, (secondResult.data.confidence ?? 68) / 100));
+        const secondScore = documentSignalScore(secondText, secondConfidence);
+
+        if (secondScore > bestScore) {
+          bestText = secondText;
+          bestConfidence = secondConfidence;
+          bestScore = secondScore;
+        }
+      }
+
+      if (!bestText) throw new OcrError('empty-text', 'No readable text was found in the image.');
 
       onProgress?.({ stage: 'finalizing', progress: 0.94 });
       return {
-        text,
-        confidence: Math.max(0, Math.min(1, (result.data.confidence ?? 70) / 100)),
+        text: bestText,
+        confidence: bestConfidence,
         engine: 'tesseract-web',
         pageCount: 1,
       };
@@ -151,6 +223,11 @@ export async function recognizeDocument(
       context.fillRect(0, 0, canvas.width, canvas.height);
       await page.render({ canvasContext: context, viewport, canvas }).promise;
       const ocrWorker = await ensureWorker();
+      await ocrWorker.setParameters?.({
+        preserve_interword_spaces: '1',
+        tessedit_pageseg_mode: '6',
+        user_defined_dpi: '300',
+      });
       const result = await ocrWorker.recognize(canvas);
       const pageText = cleanText(result.data.text ?? '');
       if (pageText) {
