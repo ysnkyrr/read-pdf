@@ -35,8 +35,22 @@ const titles: Record<SupportedLanguage, string> = {
   'zh-CN': '语言',
 };
 
+const closeLabels: Record<SupportedLanguage, string> = {
+  tr: 'Kapat',
+  en: 'Close',
+  es: 'Cerrar',
+  pt: 'Fechar',
+  fr: 'Fermer',
+  de: 'Schließen',
+  ar: 'إغلاق',
+  ru: 'Закрыть',
+  hi: 'बंद करें',
+  id: 'Tutup',
+  'zh-CN': '关闭',
+};
+
 export function LanguagePicker() {
-  const { i18n } = useTranslation();
+  useTranslation();
   const [open, setOpen] = useState(false);
   const [changing, setChanging] = useState(false);
   const current = getCurrentLanguage();
@@ -74,7 +88,7 @@ export function LanguagePicker() {
               <MoonPressable
                 onPress={() => setOpen(false)}
                 style={styles.closeButton}
-                accessibilityLabel="Close"
+                accessibilityLabel={closeLabels[current]}
                 haptic={false}
               >
                 <MoonText style={styles.closeText}>×</MoonText>
@@ -90,6 +104,7 @@ export function LanguagePicker() {
                     onPress={() => void selectLanguage(language.code)}
                     disabled={changing}
                     style={[styles.languageRow, selected && styles.languageRowSelected]}
+                    accessibilityLabel={language.label}
                     accessibilityState={{ selected }}
                   >
                     <MoonText style={[styles.languageLabel, selected && styles.languageLabelSelected]}>
