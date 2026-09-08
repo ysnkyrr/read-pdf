@@ -1,4 +1,6 @@
+import { useCallback, useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,12 +11,27 @@ import { MoonButton } from '../../moonlinea/components/MoonButton';
 import { MoonCard } from '../../moonlinea/components/MoonCard';
 import { MoonText } from '../../moonlinea/components/MoonText';
 import { moonColors, moonRadius, moonSpacing } from '../../moonlinea/theme/tokens';
+import { getDocuments } from '../../services/documentStore';
+import { ExtractedDocument } from '../../types/document';
 import { RootStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 export function HomeScreen({ navigation }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const [documents, setDocuments] = useState<ExtractedDocument[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      void getDocuments().then((items) => {
+        if (active) setDocuments(items);
+      });
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
 
   const pickDocument = async () => {
     const result = await DocumentPicker.getDocumentAsync({
@@ -34,6 +51,9 @@ export function HomeScreen({ navigation }: Props) {
       source: 'file',
     });
   };
+
+  const formatMoney = (document: ExtractedDocument) =>
+    new Intl.NumberFormat(i18n.language, { style: 'currency', currency: document.currency }).format(document.total);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -83,13 +103,38 @@ export function HomeScreen({ navigation }: Props) {
           <MoonText style={styles.sectionTitle}>{t('home.recentTitle')}</MoonText>
         </View>
 
-        <View style={styles.emptyState}>
-          <View style={styles.emptyIcon}>
-            <View style={styles.emptySheet} />
+        {documents.length === 0 ? (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <View style={styles.emptySheet} />
+            </View>
+            <MoonText style={styles.emptyTitle}>{t('home.emptyTitle')}</MoonText>
+            <MoonText style={styles.emptyBody}>{t('home.emptyBody')}</MoonText>
           </View>
-          <MoonText style={styles.emptyTitle}>{t('home.emptyTitle')}</MoonText>
-          <MoonText style={styles.emptyBody}>{t('home.emptyBody')}</MoonText>
-        </View>
+        ) : (
+          <View style={styles.recentList}>
+            {documents.slice(0, 5).map((document) => (
+              <MoonCard
+                key={document.id}
+                onPress={() => navigation.navigate('Result', { document })}
+                accessibilityLabel={`${document.supplierName}, ${document.invoiceNumber}`}
+                style={styles.recentCard}
+              >
+                <View style={styles.recentIcon}>
+                  <View style={styles.recentSheet} />
+                </View>
+                <View style={styles.recentCopy}>
+                  <MoonText style={styles.recentSupplier} numberOfLines={1}>{document.supplierName}</MoonText>
+                  <MoonText style={styles.recentMeta} numberOfLines={1}>{document.invoiceNumber} · {document.invoiceDate}</MoonText>
+                </View>
+                <View style={styles.recentAmountWrap}>
+                  <MoonText style={styles.recentAmount}>{formatMoney(document)}</MoonText>
+                  <MoonText style={styles.recentChevron}>›</MoonText>
+                </View>
+              </MoonCard>
+            ))}
+          </View>
+        )}
 
         <MoonText style={styles.privacy}>{t('home.privacy')}</MoonText>
       </ScrollView>
@@ -144,5 +189,15 @@ const styles = StyleSheet.create({
   emptySheet: { width: 16, height: 21, borderWidth: 1.5, borderColor: moonColors.textSecondary, borderRadius: 2 },
   emptyTitle: { color: moonColors.textPrimary, fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: moonSpacing[2] },
   emptyBody: { color: moonColors.textSecondary, fontSize: 14, lineHeight: 21, textAlign: 'center', maxWidth: 320 },
+  recentList: { gap: moonSpacing[3] },
+  recentCard: { flexDirection: 'row', alignItems: 'center', padding: moonSpacing[4] },
+  recentIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: moonColors.surfaceMuted, alignItems: 'center', justifyContent: 'center', marginRight: moonSpacing[3] },
+  recentSheet: { width: 16, height: 21, borderWidth: 1.5, borderColor: moonColors.textSecondary, borderRadius: 2 },
+  recentCopy: { flex: 1, minWidth: 0 },
+  recentSupplier: { color: moonColors.textPrimary, fontSize: 15, fontWeight: '800', marginBottom: 4 },
+  recentMeta: { color: moonColors.textSecondary, fontSize: 12 },
+  recentAmountWrap: { alignItems: 'flex-end', marginLeft: moonSpacing[3] },
+  recentAmount: { color: moonColors.textPrimary, fontSize: 14, fontWeight: '900', marginBottom: 2 },
+  recentChevron: { color: moonColors.textSecondary, fontSize: 20, lineHeight: 20 },
   privacy: { color: moonColors.textSecondary, fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: moonSpacing[6] },
 });
