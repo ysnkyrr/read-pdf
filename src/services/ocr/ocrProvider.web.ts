@@ -79,9 +79,8 @@ export async function recognizeDocument(
       const textContent = await page.getTextContent();
       const nativeText = cleanText(
         textContent.items
-          .map((item: { str?: string }) => item.str ?? '')
-          .filter(Boolean)
-          .join(' '),
+          .map((item: { str?: string; hasEOL?: boolean }) => `${item.str ?? ''}${item.hasEOL ? '\n' : ' '}`)
+          .join(''),
       );
 
       if (nativeText.replace(/\s/g, '').length >= MIN_NATIVE_TEXT_CHARS) {
