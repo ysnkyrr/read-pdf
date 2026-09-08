@@ -151,6 +151,17 @@ function findAmountByLabels(lines: string[], labels: string[]) {
   return 0;
 }
 
+function findReceiptTotal(lines: string[]) {
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const normalized = simplify(lines[index]);
+    if (/KDV|INDIRIM|ARA TOPLAM|PUAN/.test(normalized)) continue;
+    if (!/^(?:TOPLAM|GENEL TOPLAM|TUTAR)\b/.test(normalized)) continue;
+    const amounts = extractDecimalAmounts(lines[index]);
+    if (amounts.length) return amounts[amounts.length - 1];
+  }
+  return 0;
+}
+
 function detectRepeatedAmount(lines: string[]) {
   const scores = new Map<string, { value: number; score: number; hits: number }>();
 
@@ -158,7 +169,7 @@ function detectRepeatedAmount(lines: string[]) {
     const normalized = simplify(line);
     let lineWeight = 1;
     if (/TOPLAM|TUTAR|ODENECEK|KREDI|NAKIT|POS|TRY|\bTL\b/.test(normalized)) lineWeight += 2.5;
-    if (/TARIH|SAAT|REF|ETTN|MERSIS|BAT\.ID|IS\.ID/.test(normalized)) lineWeight *= 0.25;
+    if (/TARIH|SAAT|REF|ETTN|MERSIS|BAT\.ID|IS\.ID|PUAN/.test(normalized)) lineWeight *= 0.25;
 
     for (const amount of extractDecimalAmounts(line)) {
       if (amount < 5 || amount > 100_000) continue;
@@ -265,30 +276,51 @@ function detectDate(lines: string[], text: string) {
 }
 
 function cleanSupplierName(raw: string) {
-  return raw
+  let value = raw
+    .replace(/^[^A-Za-zÇĞİÖŞÜçğıöşü]+/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const corporateEnd = value.match(/\b(?:LTD\.?[,\s]*(?:ŞTİ|STI)\.?|LIMITED\s+ŞIRKETI|LIMITED\s+SIRKETI|A\.?\s*[ŞS]\.?|ANONIM\s+ŞIRKETI|ANONIM\s+SIRKETI)\b/i);
+  if (corporateEnd?.index != null) {
+    value = value.slice(0, corporateEnd.index + corporateEnd[0].length).trim();
+  }
+
+  return value
     .replace(/\bA[ŞS][EİI]?\.?\s*$/i, 'A.Ş.')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
 function detectSupplier(lines: string[]) {
+  const top = lines.slice(0, 18);
   const ignored = /(E-?ARSIV|E-?FATURA|FATURA|FIS|TARIH|SAAT|VKN|TCKN|VERGI|TOPLAM|KDV|MERSIS|ETTN|TEL|WWW|HTTP|SATICI|ALICI|NIHAI TUKETICI)/i;
-  const candidates = lines.slice(0, 20)
-    .map((line) => ({ raw: line.trim(), normalized: simplify(line) }))
+  const windows: string[] = [];
+
+  for (let index = 0; index < top.length; index += 1) {
+    for (let size = 1; size <= 3; size += 1) {
+      if (index + size > top.length) continue;
+      windows.push(top.slice(index, index + size).join(' '));
+    }
+  }
+
+  const candidates = windows
+    .map((raw) => ({ raw: raw.trim(), normalized: simplify(raw) }))
     .filter(({ raw, normalized }) => {
-      if (raw.length < 4 || raw.length > 130 || ignored.test(normalized)) return false;
+      if (raw.length < 4 || raw.length > 220 || ignored.test(normalized)) return false;
       const letters = (raw.match(/[A-Za-zÇĞİÖŞÜçğıöşü]/g) ?? []).length;
       return letters >= 4;
     })
     .map((candidate) => {
       const value = candidate.normalized;
       let score = 0;
-      if (/\bA\.?\s*S\.?\b|ANONIM SIRKETI|\bASE?\b/.test(value)) score += 8;
-      if (/LTD|LIMITED|STI|SIRKETI/.test(value)) score += 7;
+      if (/LTD|LIMITED|STI|SIRKETI/.test(value)) score += 11;
+      if (/\bA\.?\s*S\.?\b|ANONIM SIRKETI|\bASE?\b/.test(value)) score += 10;
+      if (/TIC|TICARET/.test(value)) score += 6;
       if (/SUPERMARKET|MARKET|MAGAZA/.test(value)) score += 5;
-      if (/TIC|TICARET/.test(value)) score += 4;
-      if (/GIDA|SAN|INS|TEKNOLOJI/.test(value)) score += 2;
-      score += Math.min(5, candidate.raw.length / 18);
+      if (/TEKS|TEKSTIL|GIDA|SAN|INS|TAAH|TUR|TEKNOLOJI/.test(value)) score += 2;
+      if (/MH\.|MAH|CAD|CD\.|SOK|NO:|ANKARA|ISTANBUL|IZMIR/.test(value)) score -= 2;
+      score += Math.min(5, candidate.raw.length / 30);
       return { ...candidate, score };
     })
     .sort((a, b) => b.score - a.score || b.raw.length - a.raw.length);
@@ -311,14 +343,25 @@ function findItemRegion(lines: string[]) {
   if (start < 0) {
     start = lines.findIndex((line) => /\b\d{8,14}\b/.test(line) && extractDecimalAmounts(line).length > 0);
   }
+
+  if (start < 0) {
+    start = lines.findIndex((line) => {
+      const value = simplify(line);
+      const hasTax = /%\s*0?(1|10|20)\b/.test(value);
+      const hasAmount = extractDecimalAmounts(line).length > 0;
+      const hasLetters = (value.match(/[A-Z]/g) ?? []).length >= 3;
+      return hasTax && hasAmount && hasLetters && !/TOPKDV|TOPLAM|TUTAR/.test(value);
+    });
+  }
+
   if (start < 0) return { start: 0, end: 0 };
 
   let end = lines.length;
-  for (let index = start; index < lines.length; index += 1) {
+  for (let index = start + 1; index < lines.length; index += 1) {
     const value = simplify(lines[index]);
     if (
       (value.includes('KDV') && value.includes('MATRAH')) ||
-      /KDV TOPLAM|BRUT TOPLAM|ODENECEK|GENEL TOPLAM|INDIRIM TOPLAM/.test(value)
+      /TOPKDV|TOP KDV|KDV TOPLAM|BRUT TOPLAM|ODENECEK|GENEL TOPLAM|INDIRIM TOPLAM|^TOPLAM\b/.test(value)
     ) {
       end = index;
       break;
@@ -330,12 +373,12 @@ function findItemRegion(lines: string[]) {
 
 function isLikelyProductDescription(line: string) {
   const normalized = simplify(line);
-  if (!normalized || normalized.length < 4 || normalized.length > 110) return false;
+  if (!normalized || normalized.length < 3 || normalized.length > 110) return false;
   if (/(TOPLAM|KDV|VERGI|TUTAR|FATURA|VKN|TCKN|TARIH|SAAT|ETTN|MERSIS|KREDI|NAKIT|BANKA|REF|MAIL|E-POSTA|WWW|HTTP|PUAN)/.test(normalized)) return false;
   if (/\b\d{8,14}\b/.test(normalized)) return false;
   const letters = (normalized.match(/[A-Z]/g) ?? []).length;
   const decimals = extractDecimalAmounts(line).length;
-  return letters >= 4 && decimals <= 1;
+  return letters >= 3 && decimals <= 1;
 }
 
 function cleanDescription(line: string) {
@@ -345,6 +388,7 @@ function cleanDescription(line: string) {
     .replace(/\b\d+(?:[.,]\d+)?\s*(?:ADET|AD\.?|PKT|PAKET|KG|GR|LT|ML)\b/gi, ' ')
     .replace(/%\s*0?(?:1|10|20)\b/g, ' ')
     .replace(/\d{1,3}(?:\.\d{3})*[.,]\d{2}\s*(?:TL|TRY|₺)?/gi, ' ')
+    .replace(/[>*]+/g, ' ')
     .replace(/\s+/g, ' ')
     .replace(/^[-:|]+|[-:|]+$/g, '')
     .trim();
@@ -374,7 +418,7 @@ function detectItems(lines: string[]) {
   for (let index = 0; index < scoped.length; index += 1) {
     const line = scoped[index];
     const normalizedLine = simplify(line);
-    if (/(TOPLAM|KDV|VERGI|ODENECEK|FATURA|VKN|TCKN|TARIH|SAAT|ETTN|MERSIS|NAKIT|KREDI|POS|BANKA|PUAN)/.test(normalizedLine)) continue;
+    if (/(TOPLAM|TOPKDV|KDV|VERGI|ODENECEK|FATURA|VKN|TCKN|TARIH|SAAT|ETTN|MERSIS|NAKIT|KREDI|POS|BANKA|PUAN)/.test(normalizedLine)) continue;
 
     const amountTokens = line.match(/\d{1,3}(?:\.\d{3})*[.,]\d{2}|\d+[.,]\d{2}/g) ?? [];
     if (!amountTokens.length) continue;
@@ -392,8 +436,7 @@ function detectItems(lines: string[]) {
 
     let description = cleanDescription(line);
 
-    const preferredNeighbors = hasBarcode ? [index + 1, index - 1] : [index + 1, index - 1];
-    for (const neighborIndex of preferredNeighbors) {
+    for (const neighborIndex of [index + 1, index - 1]) {
       if (neighborIndex < 0 || neighborIndex >= scoped.length || usedDescriptions.has(neighborIndex)) continue;
       const neighbor = scoped[neighborIndex];
       if (!isLikelyProductDescription(neighbor)) continue;
@@ -408,7 +451,7 @@ function detectItems(lines: string[]) {
       }
     }
 
-    if (!description || (description.match(/[A-Za-zÇĞİÖŞÜçğıöşü]/g) ?? []).length < 3) continue;
+    if (!description || (description.match(/[A-Za-zÇĞİÖŞÜçğıöşü]/g) ?? []).length < 2) continue;
 
     const unitPrice = amountTokens.length >= 2
       ? parseMoney(amountTokens[amountTokens.length - 2])
@@ -449,7 +492,7 @@ function detectVatBreakdown(lines: string[]): ExtractedTaxBreakdown[] {
   const rows: ExtractedTaxBreakdown[] = [];
   for (let index = start; index < Math.min(lines.length, start + 14); index += 1) {
     const normalized = simplify(lines[index]);
-    if (/KDV TOPLAM|BRUT TOPLAM|ODENECEK|GENEL TOPLAM|INDIRIM TOPLAM/.test(normalized)) break;
+    if (/TOPKDV|TOP KDV|KDV TOPLAM|BRUT TOPLAM|ODENECEK|GENEL TOPLAM|INDIRIM TOPLAM/.test(normalized)) break;
 
     const rateMatch = normalized.match(/%\s*0?(1|10|20)\b/);
     if (!rateMatch) continue;
@@ -496,12 +539,33 @@ function sumBreakdown(rows: ExtractedTaxBreakdown[]) {
   );
 }
 
-function detectInvoiceNumber(text: string) {
+function detectDocumentType(text: string): ExtractedDocument['documentType'] {
+  const normalized = simplify(text);
+  if (/E-?ARSIV FATURA|E-?FATURA|FATURA NO|FATURANO|TEMELFATURA|TICARIFATURA/.test(normalized)) return 'invoice';
+  if (/FIS\s*(?:NO|N0)|YAZAR KASA|PERAKENDE SATIS|TOPKDV/.test(normalized)) return 'receipt';
+  return 'unknown';
+}
+
+function detectDocumentNumber(lines: string[], text: string, documentType: ExtractedDocument['documentType']) {
+  if (documentType === 'receipt') {
+    for (let index = 0; index < lines.length; index += 1) {
+      const normalized = simplify(lines[index]);
+      const match = normalized.match(/\bFIS\s*(?:NO|N0|NUMARASI)?\s*[:#-]?\s*([A-Z0-9\/-]{2,16})\b/);
+      if (match?.[1] && !/^(?:NO|N0)$/.test(match[1])) return match[1];
+
+      if (/\bFIS\s*(?:NO|N0|NUMARASI)?\b/.test(normalized)) {
+        const next = simplify(lines[index + 1] ?? '');
+        const nextMatch = next.match(/^([A-Z0-9\/-]{2,16})\b/);
+        if (nextMatch?.[1]) return nextMatch[1];
+      }
+    }
+    return EMPTY_VALUE;
+  }
+
   const simplifiedText = simplify(text);
   return firstMatch(simplifiedText, [
     /(?:FATURA\s*(?:NO|NUMARASI|N0)|FATURANO)\s*[:#-]?\s*([A-Z0-9][A-Z0-9\/-]{8,30})/i,
     /\b([A-Z]{1,5}\d{10,22})\b/,
-    /(?:FIS\s*(?:NO|NUMARASI|N0))\s*[:#-]?\s*([A-Z0-9][A-Z0-9\/-]{3,24})/i,
   ]);
 }
 
@@ -518,13 +582,6 @@ function detectCurrency(text: string) {
   if (/\bUSD\b|\bUS DOLLAR\b|\bDOLAR\b/.test(normalized)) return 'USD';
   if (/\bGBP\b|\bSTERLIN\b/.test(normalized)) return 'GBP';
   return 'TRY';
-}
-
-function detectDocumentType(text: string): ExtractedDocument['documentType'] {
-  const normalized = simplify(text);
-  if (/E-?ARSIV FATURA|E-?FATURA|FATURA NO|FATURANO|TEMELFATURA|TICARIFATURA/.test(normalized)) return 'invoice';
-  if (/FIS NO|YAZAR KASA|PERAKENDE SATIS/.test(normalized)) return 'receipt';
-  return 'unknown';
 }
 
 function calculateConfidence(document: Omit<ExtractedDocument, 'confidence'>, ocrConfidence: number) {
@@ -557,8 +614,9 @@ export function parseInvoiceText(input: ParserInput, ocr: OcrResult): ExtractedD
   const searchText = text.replace(/\n/g, ' ');
   const simplifiedSearchText = simplify(searchText);
 
+  const documentType = detectDocumentType(searchText);
   const supplierTaxNumber = detectTaxNumber(simplifiedSearchText);
-  const invoiceNumber = detectInvoiceNumber(searchText);
+  const invoiceNumber = detectDocumentNumber(lines, searchText, documentType);
   const invoiceDate = detectDate(lines, searchText);
   const ettn = detectEttn(searchText);
   const items = detectItems(lines);
@@ -579,18 +637,22 @@ export function parseInvoiceText(input: ParserInput, ocr: OcrResult): ExtractedD
     'VERGİLER DAHİL TOPLAM',
     'VERGILER DAHIL TOPLAM',
   ]);
+  const receiptTotal = documentType === 'receipt' ? findReceiptTotal(lines) : 0;
   const repeatedAmount = detectRepeatedAmount(lines);
   const itemGross = roundMoney(items.reduce((sum, item) => sum + item.total, 0));
   const detectedVatGross = roundMoney(detectedVat.base + detectedVat.tax);
 
   const total = chooseConsensusAmount([
     { value: labeledTotal, weight: 3.5 },
+    { value: receiptTotal, weight: receiptTotal > 0 ? 4.5 : 0 },
     { value: repeatedAmount, weight: 3 },
-    { value: itemGross, weight: items.length >= 2 ? 3.5 : 1.5 },
+    { value: itemGross, weight: items.length ? 4 : 0 },
     { value: detectedVatGross, weight: detectedBreakdown.length ? 4.5 : 0 },
   ]);
 
   const labeledTaxTotal = findAmountByLabels(lines, [
+    'TOPKDV',
+    'TOP KDV',
     'KDV TOPLAM',
     'KDV TOPLAMI',
     'HESAPLANAN KDV',
@@ -599,9 +661,9 @@ export function parseInvoiceText(input: ParserInput, ocr: OcrResult): ExtractedD
   ]);
 
   const taxTotal = chooseConsensusAmount([
-    { value: labeledTaxTotal, weight: 2.5 },
+    { value: labeledTaxTotal, weight: labeledTaxTotal > 0 ? 4 : 0 },
     { value: detectedVat.tax, weight: detectedBreakdown.length ? 5 : 0 },
-    { value: derivedVat.tax, weight: derivedBreakdown.length ? 2.5 : 0 },
+    { value: derivedVat.tax, weight: derivedBreakdown.length ? 4 : 0 },
   ]);
 
   const preferredBreakdown = detectedBreakdown.length
@@ -618,10 +680,10 @@ export function parseInvoiceText(input: ParserInput, ocr: OcrResult): ExtractedD
   const subtotal = chooseConsensusAmount([
     { value: labeledSubtotal, weight: 2 },
     { value: preferredVat.base, weight: preferredBreakdown.length ? 4.5 : 0 },
-    { value: computedSubtotal, weight: computedSubtotal > 0 ? 4 : 0 },
+    { value: computedSubtotal, weight: computedSubtotal > 0 ? 4.5 : 0 },
   ]);
 
-  const paymentMethod = /KREDI\s*KARTI|CREDIT\s*CARD|BANKA\s*KARTI|CARD/i.test(simplifiedSearchText)
+  const paymentMethod = /KREDI\s*KARTI|CREDIT\s*CARD|BANKA\s*KARTI|CARD|\bKREDI\b/i.test(simplifiedSearchText)
     ? 'Kredi Kartı'
     : /NAKIT|CASH/i.test(simplifiedSearchText)
       ? 'Nakit'
@@ -634,7 +696,7 @@ export function parseInvoiceText(input: ParserInput, ocr: OcrResult): ExtractedD
     sourceUri: input.uri,
     fileName: input.name,
     mimeType: input.mimeType,
-    documentType: detectDocumentType(searchText),
+    documentType,
     supplierName: detectSupplier(lines),
     supplierTaxNumber,
     invoiceNumber,
