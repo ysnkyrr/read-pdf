@@ -3,6 +3,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { HomeScreen } from '../features/home/HomeScreen';
 import { ReviewScreen } from '../features/documents/ReviewScreen';
+import { AnalysisScreen } from '../features/extraction/AnalysisScreen';
+import { ResultScreen } from '../features/extraction/ResultScreen';
 import { ScannerScreen } from '../features/scanner/ScannerScreen';
 import { moonColors } from '../moonlinea/theme/tokens';
 import { RootStackParamList } from './types';
@@ -35,6 +37,8 @@ export function AppNavigator() {
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Scanner" component={ScannerScreen} options={{ animation: 'fade' }} />
         <Stack.Screen name="Review" component={ReviewScreen} />
+        <Stack.Screen name="Analysis" component={AnalysisScreen} options={{ gestureEnabled: false }} />
+        <Stack.Screen name="Result" component={ResultScreen} options={{ gestureEnabled: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
