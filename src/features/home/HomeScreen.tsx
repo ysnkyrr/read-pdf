@@ -116,7 +116,7 @@ export function HomeScreen({ navigation }: Props) {
             {documents.slice(0, 5).map((document) => (
               <MoonCard
                 key={document.id}
-                onPress={() => navigation.navigate('Result', { document })}
+                onPress={() => navigation.navigate('Result', { document, origin: 'archive' })}
                 accessibilityLabel={`${document.supplierName}, ${document.invoiceNumber}`}
                 style={styles.recentCard}
               >
