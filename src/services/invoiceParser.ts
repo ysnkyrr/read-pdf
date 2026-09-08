@@ -275,9 +275,19 @@ function detectDate(lines: string[], text: string) {
   return [...weighted.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? EMPTY_VALUE;
 }
 
+function normalizeCommonReceiptTerm(value: string) {
+  const compact = simplify(value).replace(/[.\s_-]+/g, '');
+  if (/^[MN]GIYI[MN]$/.test(compact) || compact === 'GIYIM' || compact === 'GIYIN') {
+    return 'M.GİYİM';
+  }
+  return value;
+}
+
 function cleanSupplierName(raw: string) {
   let value = raw
+    .replace(/^(?:[I1l|]\s*[-—–|.:]+\s*)+/, '')
     .replace(/^[^A-Za-zÇĞİÖŞÜçğıöşü]+/, '')
+    .replace(/\s*[|]\s*[.:-]?\s*/g, ' · ')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -288,6 +298,7 @@ function cleanSupplierName(raw: string) {
 
   return value
     .replace(/\bA[ŞS][EİI]?\.?\s*$/i, 'A.Ş.')
+    .replace(/\s*[·|]\s*[·|]+\s*/g, ' · ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -404,7 +415,7 @@ function cleanDescription(line: string) {
     value = parts.join(' ');
   }
 
-  return value.trim();
+  return normalizeCommonReceiptTerm(value.trim());
 }
 
 function detectItems(lines: string[]) {
